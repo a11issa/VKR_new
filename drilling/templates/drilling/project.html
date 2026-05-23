@@ -1,0 +1,356 @@
+{% extends 'drilling/base.html' %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="/" class="btn" style="background-color: #f3671a !important; color: white !important; border: none !important; padding: 8px 20px !important;">Назад</a>
+    <a href="{% url 'export_pdf' project.id %}" class="btn" style="padding: 8px 20px !important;">Скачать PDF-отчет</a>
+</div>
+
+{% if error_msg %}
+    <div class="alert text-center">{{ error_msg }}</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card p-3">
+            <h3 style="font-size: 1.6rem !important; margin-bottom: 32px !important;">Введите параметры</h3>
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <input type="text" name="interval_name" class="form-control" style="font-size: 13px;" placeholder="Название интервала" value="{{ form_data.interval_name }}" required />
+                </div>
+
+                <div class="input-group mb-3">
+                    <input type="number" step="0.1" name="depth" class="form-control" style="font-size: 13px;" placeholder="Глубина (м)" value="{{ form_data.depth }}" required />
+                    <input type="number" step="0.1" name="diameter" class="form-control" style="font-size: 13px;" placeholder="Диаметр долота (мм)" value="{{ form_data.diameter }}" required />
+                </div>
+
+                <div class="input-group mb-3" style="margin-top: 24px;">
+                    <input type="number" step="0.1" name="p_pl" class="form-control" style="font-size: 13px;" placeholder="Давление пласта (МПа)" value="{{ form_data.p_pl }}" required />
+                    <input type="number" step="1" name="t_zab" class="form-control" style="font-size: 13px;" placeholder="Температура забоя (°C)" value="{{ form_data.t_zab }}" required />
+                </div>
+
+                <div style="margin-top: 24px;">
+                    <select name="interval_type" id="intervalType" class="form-select mb-3" style="font-size: 13px;" onchange="toggleDynamicFields()" required>
+                        {% if form_data.interval_type == "Нормальные условия (Верхние интервалы)" %}
+                            <option value="Нормальные условия (Верхние интервалы)" selected>Нормальные условия</option>
+                        {% else %}
+                            <option value="Нормальные условия (Верхние интервалы)">Нормальные условия</option>
+                        {% endif %}
+
+                        {% if form_data.interval_type == "Осложненные условия (Промежуточная колонна)" %}
+                            <option value="Осложненные условия (Промежуточная колонна)" selected>Осложненные условия</option>
+                        {% else %}
+                            <option value="Осложненные условия (Промежуточная колонна)">Осложненные условия</option>
+                        {% endif %}
+
+                        {% if form_data.interval_type == "Продуктивный пласт (Зона притока)" %}
+                            <option value="Продуктивный пласт (Зона притока)" selected>Продуктивный пласт</option>
+                        {% else %}
+                            <option value="Продуктивный пласт (Зона притока)">Продуктивный пласт</option>
+                        {% endif %}
+                    </select>
+
+                    <select name="well_profile" id="wellProfile" class="form-select mb-3" style="font-size: 13px;" onchange="toggleDynamicFields()">
+                        {% if form_data.well_profile == "Вертикальный" %}
+                            <option value="Вертикальный" selected>Вертикальный</option>
+                        {% else %}
+                            <option value="Вертикальный">Вертикальный</option>
+                        {% endif %}
+
+                        {% if form_data.well_profile == "Наклонно-направленный" %}
+                            <option value="Наклонно-направленный" selected>Наклонно-направленный</option>
+                        {% else %}
+                            <option value="Наклонно-направленный">Наклонно-направленный</option>
+                        {% endif %}
+
+                        {% if form_data.well_profile == "Горизонтальный" %}
+                            <option value="Горизонтальный" selected>Горизонтальный</option>
+                        {% else %}
+                            <option value="Горизонтальный">Горизонтальный</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <div id="fluidTypeBlock" style="display: none; margin-top: 16px;">
+                    <select name="fluid_type" class="form-select mb-3" style="font-size: 13px;">
+                        <option value="">Выберите флюид</option>
+                        {% if form_data.fluid_type == "Нефть" %}
+                            <option value="Нефть" selected>Нефть</option>
+                        {% else %}
+                            <option value="Нефть">Нефть</option>
+                        {% endif %}
+
+                        {% if form_data.fluid_type == "Газ" %}
+                            <option value="Газ" selected>Газ</option>
+                        {% else %}
+                            <option value="Газ">Газ</option>
+                        {% endif %}
+
+                        {% if form_data.fluid_type == "Вода (нагнетательная скважина)" %}
+                            <option value="Вода (нагнетательная скважина)" selected>Вода (нагнетательная)</option>
+                        {% else %}
+                            <option value="Вода (нагнетательная скважина)">Вода (нагнетательная)</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <div id="angleBlock" style="display: none; margin-top: 16px;">
+                    <input type="number" step="0.1" name="angle" id="angleInput" class="form-control mb-3" style="font-size: 13px;" placeholder="Зенитный угол (°)" value="{{ form_data.angle|default:'0' }}" />
+                </div>
+
+                <div id="complicationsBlock" style="display: none; margin-top: 16px; border: 1px solid #dcdcdc; border-radius: 15px; padding: 12px;">
+                    <label style="font-weight: 700; font-size: 13px; margin-bottom: 8px;">Выберите осложнения:</label>
+                    <div class="form-check mb-1">
+                        {% if "Осыпи и обвалы" in form_data.complications %}
+                            <input class="form-check-input" type="checkbox" name="complications" value="Осыпи и обвалы" id="c1_on" checked />
+                            <label class="form-check-label" for="c1_on" style="font-size: 13px;">Осыпи и обвалы</label>
+                        {% else %}
+                            <input class="form-check-input" type="checkbox" name="complications" value="Осыпи и обвалы" id="c1_off" />
+                            <label class="form-check-label" for="c1_off" style="font-size: 13px;">Осыпи и обвалы</label>
+                        {% endif %}
+                    </div>
+                    <div class="form-check mb-1">
+                        {% if "Поглощение бурового раствора" in form_data.complications %}
+                            <input class="form-check-input" type="checkbox" name="complications" value="Поглощение бурового раствора" id="c2_on" checked />
+                            <label class="form-check-label" for="c2_on" style="font-size: 13px;">Поглощение бурового раствора</label>
+                        {% else %}
+                            <input class="form-check-input" type="checkbox" name="complications" value="Поглощение бурового раствора" id="c2_off" />
+                            <label class="form-check-label" for="c2_off" style="font-size: 13px;">Поглощение бурового раствора</label>
+                        {% endif %}
+                    </div>
+                    <div class="form-check mb-1">
+                        {% if "Наличие сероводорода" in form_data.complications %}
+                            <input class="form-check-input" type="checkbox" name="complications" value="Наличие сероводорода" id="c3_on" checked />
+                            <label class="form-check-label" for="c3_on" style="font-size: 13px;">Наличие сероводорода</label>
+                        {% else %}
+                            <input class="form-check-input" type="checkbox" name="complications" value="Наличие сероводорода" id="c3_off" />
+                            <label class="form-check-label" for="c3_off" style="font-size: 13px;">Наличие сероводорода</label>
+                        {% endif %}
+                    </div>
+                    <div class="form-check">
+                        {% if "Водоохранная зона" in form_data.complications %}
+                            <input class="form-check-input" type="checkbox" name="complications" value="Водоохранная зона" id="c4_on" checked />
+                            <label class="form-check-label" for="c4_on" style="font-size: 13px;">Водоохранная зона</label>
+                        {% else %}
+                            <input class="form-check-input" type="checkbox" name="complications" value="Водоохранная зона" id="c4_off" />
+                            <label class="form-check-label" for="c4_off" style="font-size: 13px;">Водоохранная зона</label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn w-100" style="margin-top: 32px; font-size: 13px; padding: 10px;">Рассчитать</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+
+        <div class="card p-4">
+
+            <h2 style="margin-bottom: 24px !important; font-size: 1.5rem;">Название проекта: {{ project.name }}</h2>
+
+            {% for item in intervals %}
+                <div class="card mb-4" style="position: relative; padding: 24px; background-color: #fafafa; border: 1px solid #dcdcdc;">
+
+                    <a href="{% url 'delete_interval' project.id item.obj.id %}"
+                       style="position: absolute; top: 24px; right: 24px; color: #f3671a; text-decoration: none; font-size: 20px; font-weight: 700; line-height: 1;">✕</a>
+
+                    <h3 style="margin-bottom: 16px !important;">Интервал: {{ item.obj.interval_name }} (до {{ item.obj.depth }} м)</h3>
+
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 style="margin: 0; color: #f3671a; font-size: 1.4rem;">1. {{ item.obj.selected_fluid.name }}</h4>
+                        <div class="text-end" style="font-size: 13px;">
+                            <span class="d-block">Объем системы: {{ item.volume }} м³</span>
+                            <span class="d-block">Общая стоимость: {{ item.cost|floatformat:"0" }} руб.</span>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4" style="padding: 20px; border-color: #eee; font-size: 14px; background: #ffffff;">
+                        <div class="row" style="gap: 20px 0;">
+                            <div class="col-md-4">
+                                <span style="font-weight: 700; color: #303030; display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: 1px;">ИСХОДНЫЕ ДАННЫЕ</span>
+                                <div style="line-height: 1.8;">
+                                    Диаметр долота: {{ item.obj.diameter }} мм<br />
+                                    P пласта: {{ item.obj.p_pl }} МПа<br />
+                                    T забоя: {{ item.obj.t_zab }} °C<br />
+                                    Профиль: {{ item.obj.well_profile }} ({{ item.obj.angle }}°)<br />
+                                    Осложнения: {{ item.obj.complications_list|default:"Нет" }}
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <span style="font-weight: 700; color: #303030; display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: 1px;">РЕЗУЛЬТАТ ПОДБОРА</span>
+                                <div style="line-height: 1.8;">
+                                    Основа: {{ item.obj.selected_fluid.base_type }}<br />
+                                    Плотность: {{ item.obj.selected_fluid.density_min }}-{{ item.obj.selected_fluid.density_max }} г/см³<br />
+                                    T макс: до {{ item.obj.selected_fluid.temp_max }} °C<br />
+                                    Водоотдача (справ.): {{ item.obj.selected_fluid.filtration }} см³<br />
+                                    Ингибирование: {{ item.obj.selected_fluid.inhibition }} у.е.
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <span style="font-weight: 700; color: #303030; display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: 1px;">РАСЧЕТ ПАРАМЕТРОВ</span>
+                                <div style="line-height: 1.8;">
+                                    P погл: {{ item.p_pogl }} МПа<br />
+                                    P гр: {{ item.p_gr }} МПа<br />
+                                    Тр. плотность: {{ item.obj.req_density_min }} г/см³<br />
+                                    Пл. вязкость: {{ item.target_props.viscosity }} мПа·с<br />
+                                    ДНС ({{ item.obj.angle }}°): {{ item.target_props.tau_0 }} дПа<br />
+                                    Макс. водоотдача: {{ item.target_props.filtration }} см³
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 style="margin-bottom: 16px !important;">Детализация рецептуры:</h6>
+                    <table class="table mb-4" style="font-size: 13px;">
+                        <thead>
+                            <tr><th>Реагент</th><th>Назначение</th><th>Концентрация (кг/м³)</th><th>Цена (руб./кг)</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for r in item.recipe %}
+                            <tr>
+                                <td>{{ r.name }}</td>
+                                <td>{{ r.func }}</td>
+                                <td>{{ r.mass }}</td>
+                                <td>{{ r.price_kg|default:"-" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    {% if item.alternatives %}
+                    <div>
+                        <button type="button" class="btn w-100" style="background-color: #6c757d !important; color: white !important; margin-bottom: 0;" onclick="toggleCollapse('alt-box-{{ item.obj.id }}')">
+                            Показать альтернативы (еще 2 варианта)
+                        </button>
+
+                        <div id="alt-box-{{ item.obj.id }}" style="display: none; margin-top: 24px;">
+
+                            {% for alt in item.alternatives %}
+                                <div class="card mb-4" style="padding: 24px; background-color: #ffffff; border: 1px solid #dcdcdc;">
+
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h4 style="margin: 0; color: #f3671a; font-size: 1.4rem;">{{ alt.place }}. {{ alt.name }}</h4>
+                                        <div class="text-end" style="font-size: 13px;">
+                                            <span class="d-block">Объем системы: {{ item.volume }} м³</span>
+                                            <span class="d-block">Общая стоимость: {{ alt.total_cost|default:alt.cost|floatformat:"0" }} руб.</span>
+                                        </div>
+                                    </div>
+
+                                    <p style="color: #303030; font-size: 13px; margin-bottom: 16px;">
+                                        <span style="font-weight: 700;">Причина отставания:</span> <span style="font-weight: 400;">{{ alt.reason }}</span>
+                                    </p>
+
+                                    <div class="card mb-4" style="padding: 20px; border-color: #eee; font-size: 14px; background: #fafafa;">
+                                        <div class="row" style="gap: 20px 0;">
+                                            <div class="col-md-4">
+                                                <span style="font-weight: 700; color: #303030; display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: 1px;">ИСХОДНЫЕ ДАННЫЕ</span>
+                                                <div style="line-height: 1.8;">
+                                                    Диаметр долота: {{ item.obj.diameter }} мм<br />
+                                                    P пласта: {{ item.obj.p_pl }} МПа<br />
+                                                    T забоя: {{ item.obj.t_zab }} °C<br />
+                                                    Профиль: {{ item.obj.well_profile }} ({{ item.obj.angle }}°)<br />
+                                                    Осложнения: {{ item.obj.complications_list|default:"Нет" }}
+                                                </div>
+                                            </div>
+
+                                            <div class="col-md-4">
+                                                <span style="font-weight: 700; color: #303030; display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: 1px;">РЕЗУЛЬТАТ ПОДБОРА</span>
+                                                <div style="line-height: 1.8;">
+                                                    Основа: {{ alt.base }}<br />
+                                                    Плотность: {{ alt.d_min }}-{{ alt.d_max }} г/см³<br />
+                                                    T макс: до {{ alt.t_max }} °C<br />
+                                                    Водоотдача (справ.): {{ alt.filtration|default:"-" }} см³<br />
+                                                    Ингибирование: {{ alt.inhibition|default:"-" }} у.е.
+                                                </div>
+                                            </div>
+
+                                            <div class="col-md-4">
+                                                <span style="font-weight: 700; color: #303030; display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: 1px;">РАСЧЕТ ПАРАМЕТРОВ</span>
+                                                <div style="line-height: 1.8;">
+                                                    P погл: {{ item.p_pogl }} МПа<br />
+                                                    P гр: {{ item.p_gr }} МПа<br />
+                                                    Тр. плотность: {{ item.obj.req_density_min }} г/см³<br />
+                                                    Пл. вязкость: {{ item.target_props.viscosity }} мПа·с<br />
+                                                    ДНС ({{ item.obj.angle }}°): {{ item.target_props.tau_0 }} дПа<br />
+                                                    Макс. водоотдача: {{ item.target_props.filtration }} см³
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h6 style="margin-bottom: 16px !important;">Детализация рецептуры:</h6>
+                                    <table class="table mb-0" style="font-size: 13px; background: #fff;">
+                                        <thead>
+                                            <tr><th>Реагент</th><th>Назначение</th><th>Концентрация (кг/м³)</th><th>Цена (руб./кг)</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {% if alt.recipe %}
+                                                {% for r in alt.recipe %}
+                                                <tr>
+                                                    <td>{{ r.name }}</td>
+                                                    <td>{{ r.func }}</td>
+                                                    <td>{{ r.mass }}</td>
+                                                    <td>{{ r.price_kg|default:"-" }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            {% else %}
+                                                <tr><td colspan="4" class="text-muted text-center" style="padding: 20px;">Рецептура будет рассчитана при выборе данного раствора в качестве основного.</td></tr>
+                                            {% endif %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% endfor %}
+
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </div>
+            {% endfor %}
+
+        </div> </div>
+</div>
+
+<script>
+    function toggleDynamicFields() {
+        const intType = document.getElementById('intervalType').value;
+        const fluidBlock = document.getElementById('fluidTypeBlock');
+        const compBlock = document.getElementById('complicationsBlock');
+
+        if (intType.includes('Продуктивный')) {
+            fluidBlock.style.display = 'block';
+            compBlock.style.display = 'block';
+        } else if (intType.includes('Осложненные')) {
+            fluidBlock.style.display = 'none';
+            compBlock.style.display = 'block';
+        } else {
+            fluidBlock.style.display = 'none';
+            compBlock.style.display = 'none';
+        }
+
+        const profile = document.getElementById('wellProfile').value;
+        const angleBlock = document.getElementById('angleBlock');
+        if (profile !== 'Вертикальный') {
+            angleBlock.style.display = 'block';
+        } else {
+            angleBlock.style.display = 'none';
+        }
+    }
+
+    toggleDynamicFields();
+
+    function toggleCollapse(id) {
+        const el = document.getElementById(id);
+        if (el.style.display === "none") {
+            el.style.display = "block";
+        } else {
+            el.style.display = "none";
+        }
+    }
+</script>
+{% endblock %}

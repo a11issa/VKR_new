@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fluid selection</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        /* 1. ПОДКЛЮЧАЕМ ЛОКАЛЬНЫЙ ШРИФТ MONTSERRAT */
+        @font-face {
+            font-family: 'Montserrat';
+            src: url('/static/Montserrat-Regular.ttf') format('truetype');
+            font-weight: 400;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'Montserrat';
+            src: url('/static/Montserrat-Bold.ttf') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+        }
+
+        /* 2. БАЗОВЫЕ НАСТРОЙКИ (Шрифт и отсутствие теней) */
+        * {
+            font-family: 'Montserrat', sans-serif !important;
+            box-shadow: none !important;
+        }
+
+        /* 3. УМЕНЬШАЕМ ОСНОВНОЙ ТЕКСТ (до 14px) */
+        body, .form-control, .form-select, .btn, .table, .nav-tabs .nav-link, .list-group-item, span, label {
+            font-size: 14px !important;
+        }
+
+        body {
+            background-color: #f7f7f7 !important;
+            color: #000000;
+        }
+
+        /* 4. АБСОЛЮТНО ВСЕ ЗАКРУГЛЯЕМ */
+        .card, .form-control, .form-select, .alert, .nav-tabs .nav-link, .list-group-item {
+            border-radius: 20px !important;
+        }
+        .btn {
+            border-radius: 30px !important;
+        }
+
+        .table {
+            border-radius: 20px !important;
+            overflow: hidden !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+            border: 1px solid #dcdcdc !important;
+        }
+
+        /* 5. ЖИРНЫЕ ЗАГОЛОВКИ, ОТСТУПЫ И ИХ УМЕНЬШЕННЫЙ РАЗМЕР */
+        h1, h2, h3, h4, h5, h6, .card-header, legend {
+            margin-bottom: 32px !important;
+            font-weight: 700 !important;
+            color: #000000;
+            border-bottom: none !important;
+            background-color: transparent !important;
+        }
+
+        /* Размеры заголовков */
+        h2 { font-size: 1.5rem !important; }
+        h3 { font-size: 1.25rem !important; }
+        h4 { font-size: 1.1rem !important; }
+        h5, h6 { font-size: 1rem !important; }
+
+        /* 6. ШАПКА САЙТА И ШАПКИ ТАБЛИЦ (ЦВЕТ #303030) */
+        .header {
+            background-color: #303030 !important;
+            margin-bottom: 32px !important;
+            padding: 20px 0;
+            border-radius: 0 0 24px 24px !important;
+        }
+        .navbar-brand {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            font-size: 16px !important; /* Название сайта чуть больше основного текста */
+        }
+
+        /* Кнопки в шапке: прозрачный фон и оранжевый текст */
+        .header .btn {
+            background-color: transparent !important;
+            color: #f3671a !important;
+            font-weight: 700 !important;
+            padding: 6px 16px !important;
+            border: none !important;
+        }
+        .header .btn:hover {
+            background-color: rgba(243, 103, 26, 0.1) !important;
+        }
+
+        /* Шапка таблицы */
+        th, .table thead th {
+            font-weight: 700 !important;
+            text-align: center !important;
+            vertical-align: middle !important;
+            background-color: #303030 !important;
+            color: #ffffff !important;
+            border: 1px solid #303030 !important;
+            padding: 16px !important;
+        }
+
+        /* Тело таблицы */
+        td, .table tbody td {
+            text-align: center !important;
+            vertical-align: middle !important;
+            color: #000000 !important;
+            border: 1px solid #dcdcdc !important;
+            padding: 12px !important;
+        }
+
+        /* 7. ГЛОБАЛЬНЫЕ КНОПКИ (ЦВЕТ #f3671a) */
+        .btn {
+            background-color: #f3671a !important;
+            color: #ffffff !important;
+            border: none !important;
+            font-weight: 700 !important;
+            padding: 10px 24px !important;
+            transition: transform 0.1s, opacity 0.2s !important;
+        }
+        .btn:hover {
+            opacity: 0.85 !important;
+            color: #ffffff !important;
+            transform: scale(0.98);
+        }
+
+        /* 8. КАРТОЧКИ И ФОРМЫ */
+        .card, .form-control, .form-select, .list-group-item, .alert {
+            background-color: #ffffff !important;
+            border: 1px solid #e0e0e0 !important;
+            color: #000000 !important;
+        }
+
+        .nav-tabs {
+            border-bottom: 2px solid #e0e0e0 !important;
+            margin-bottom: 32px !important;
+        }
+        .nav-tabs .nav-link {
+            border: 1px solid transparent !important;
+            color: #000000 !important;
+            font-weight: 400 !important;
+            padding: 10px 20px;
+        }
+        .nav-tabs .nav-link.active {
+            border-color: #e0e0e0 #e0e0e0 #ffffff !important;
+            border-bottom: 1px solid #ffffff !important;
+            font-weight: 700 !important;
+            background-color: #ffffff !important;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <nav class="navbar navbar-expand-lg container p-0">
+            <a class="navbar-brand" href="/">Fluid selection</a>
+            <div class="collapse navbar-collapse justify-content-end">
+                {% if request.session.user_id %}
+                <ul class="navbar-nav align-items-center">
+                    {% if request.session.role == 'admin' %}
+                    <li class="nav-item me-2"><a class="btn" href="{% url 'admin_panel' %}">Справочники</a></li>
+                    {% endif %}
+                    <li class="nav-item"><a class="btn" href="{% url 'logout' %}">Выход</a></li>
+                </ul>
+                {% endif %}
+            </div>
+        </nav>
+    </header>
+
+    <main class="container pb-5">
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
