@@ -161,7 +161,7 @@
             <div class="collapse navbar-collapse justify-content-end">
                 {% if request.session.user_id %}
                 <ul class="navbar-nav align-items-center">
-                    {% if request.session.role == 'admin' %}
+                    {% if request.session.role == 'admin' or request.session.role == 'main_engineer' %}
                     <li class="nav-item me-2"><a class="btn" href="{% url 'admin_panel' %}">Справочники</a></li>
                     {% endif %}
                     <li class="nav-item"><a class="btn" href="{% url 'logout' %}">Выход</a></li>

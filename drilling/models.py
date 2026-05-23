@@ -45,7 +45,15 @@ class LocalWeight(models.Model):
         managed = False  # Не забудь убрать False и сделать миграции, если создаешь таблицу с нуля
         db_table = 'local_weights'
 
-class Fluid(models.Model): # Таблица fluids - справочник буровых растворов
+class BaseWeight(models.Model):
+    weight_interval = models.FloatField(default=0.10)
+    weight_profile = models.FloatField(default=0.30)
+    weight_complication = models.FloatField(default=0.60)
+
+    class Meta:
+        managed = False # Не забудь убрать False и сделать python manage.py makemigrations и migrate!
+        db_table = 'base_weights'
+class Fluid(models.Model):
     name = models.CharField(max_length=255)
     base_type = models.CharField(max_length=100)
     is_drill_in_fluid = models.BooleanField(default=False)

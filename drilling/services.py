@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 from django.db.models import Q
-from .models import Fluid, FluidRecipe, Reagent, LocalWeight
+from .models import Fluid, FluidRecipe, Reagent, LocalWeight, BaseWeight
 
 # Расчет окна бурения
 def calculate_physics(H, D_mm, P_pl, is_gas_or_unexplored=False):
@@ -72,72 +72,44 @@ def get_calculated_properties(rho_req, angle, dp_sigma):
 
 
 def calculate_ahp_weights(matrix):
-    """
-    Рассчитывает веса критериев и Отношение Согласованности (CR)
-    методом собственного вектора Саати.
-    matrix: 5x5 numpy array
-    """
     n = matrix.shape[0]
-
-    # 1. Вычисляем собственные значения и собственные векторы (Eigenvalues & Eigenvectors)
     eigenvalues, eigenvectors = np.linalg.eig(matrix)
-
-    # 2. Находим максимальное собственное значение (lambda_max)
     max_eigenval = np.max(np.real(eigenvalues))
-
-    # 3. Извлекаем соответствующий собственный вектор и берем его действительную часть
     max_eigenvec = np.real(eigenvectors[:, np.argmax(np.real(eigenvalues))])
-
-    # 4. Нормализуем вектор (чтобы сумма весов равнялась 1.0)
     weights = max_eigenvec / np.sum(max_eigenvec)
-
-    # 5. Расчет Отношения Согласованности (CR)
-    # Индекс согласованности (CI)
-    ci = (max_eigenval - n) / (n - 1)
-
-    # Случайный индекс (RI) для матрицы 5x5 по Саати равен 1.12
-    ri = 1.12
-
-    # Итоговое Отношение Согласованности (CR)
+    ci = (max_eigenval - n) / (n - 1) if n > 1 else 0
+    ri_dict = {1: 0.0, 2: 0.0, 3: 0.58, 4: 0.90, 5: 1.12}
+    ri = ri_dict.get(n, 1.12)
     cr = ci / ri if ri != 0 else 0
-
     return [round(w, 4) for w in weights], round(cr, 4)
 
 # Нормализация данных для TOPSIS
 def aggregate_and_normalize_weights(interval_type, well_profile, fluid_type, complications_list):
-    # Мета-веса факторов
-    W_INT = 0.10
-    W_PROF = 0.30
-    W_COMP = 0.60
+    # Теперь мы берем мета-веса из базы данных!
+    base = BaseWeight.objects.first()
+    if base:
+        W_INT, W_PROF, W_COMP = base.weight_interval, base.weight_profile, base.weight_complication
+    else:
+        W_INT, W_PROF, W_COMP = 0.10, 0.30, 0.60
 
-    # Базовый нулевой вектор
     final_w = {'fil': 0.0, 'inh': 0.0, 'fric': 0.0, 'eco': 0.0, 'cost': 0.0}
 
-    # 1. Получаем вес интервала
-    try:
-        ip = LocalWeight.objects.filter(category='interval', name__icontains=interval_type.split(' ')[0]).first()
-        if ip:
-            final_w['fil'] += ip.weight_filtration * W_INT
-            final_w['inh'] += ip.weight_inhibition * W_INT
-            final_w['fric'] += ip.weight_friction * W_INT
-            final_w['eco'] += ip.weight_eco * W_INT
-            final_w['cost'] += ip.weight_cost * W_INT
-    except:
-        pass
+    ip = LocalWeight.objects.filter(category='interval', name__icontains=interval_type.split(' ')[0]).first()
+    if ip:
+        final_w['fil'] += ip.weight_filtration * W_INT
+        final_w['inh'] += ip.weight_inhibition * W_INT
+        final_w['fric'] += ip.weight_friction * W_INT
+        final_w['eco'] += ip.weight_eco * W_INT
+        final_w['cost'] += ip.weight_cost * W_INT
 
-    # 2. Получаем вес профиля ствола
-    try:
-        pp = LocalWeight.objects.filter(category='profile', name__icontains=well_profile).first()
-        if pp:
-            final_w['fil'] += pp.weight_filtration * W_PROF
-            final_w['inh'] += pp.weight_inhibition * W_PROF
-            final_w['fric'] += pp.weight_friction * W_PROF
-            final_w['eco'] += pp.weight_eco * W_PROF
-            final_w['cost'] += pp.weight_cost * W_PROF
-    except:
-        pass
+    pp = LocalWeight.objects.filter(category='profile', name__icontains=well_profile).first()
+    if pp:
+        final_w['fil'] += pp.weight_filtration * W_PROF
+        final_w['inh'] += pp.weight_inhibition * W_PROF
+        final_w['fric'] += pp.weight_friction * W_PROF
+        final_w['eco'] += pp.weight_eco * W_PROF
+        final_w['cost'] += pp.weight_cost * W_PROF
 
-    # 3. Получаем вес осложнений (Используем метод выделения доминирующей угрозы - MAX)
     comp_vectors = []
     if complications_list:
         for comp in complications_list:
@@ -145,25 +117,46 @@ def aggregate_and_normalize_weights(interval_type, well_profile, fluid_type, com
             if cp: comp_vectors.append(cp)
 
     if comp_vectors:
-        # Берем максимальную угрозу по каждому критерию из выбранных осложнений
         final_w['fil'] += max(c.weight_filtration for c in comp_vectors) * W_COMP
         final_w['inh'] += max(c.weight_inhibition for c in comp_vectors) * W_COMP
         final_w['fric'] += max(c.weight_friction for c in comp_vectors) * W_COMP
         final_w['eco'] += max(c.weight_eco for c in comp_vectors) * W_COMP
         final_w['cost'] += max(c.weight_cost for c in comp_vectors) * W_COMP
 
-    # Нормализация (чтобы сумма была строго 1.0)
     total = sum(final_w.values())
-    if total == 0: return {'weight_filtration': 0.2, 'weight_inhibition': 0.2, 'weight_friction': 0.2,
-                           'weight_eco': 0.2, 'weight_cost': 0.2}
+    if total == 0: return {'weight_filtration': 0.2, 'weight_inhibition': 0.2, 'weight_friction': 0.2, 'weight_eco': 0.2, 'weight_cost': 0.2}
 
     return {
-        'weight_filtration': round(final_w['fil'] / total, 3),
-        'weight_inhibition': round(final_w['inh'] / total, 3),
-        'weight_friction': round(final_w['fric'] / total, 3),
-        'weight_eco': round(final_w['eco'] / total, 3),
+        'weight_filtration': round(final_w['fil'] / total, 3), 'weight_inhibition': round(final_w['inh'] / total, 3),
+        'weight_friction': round(final_w['fric'] / total, 3), 'weight_eco': round(final_w['eco'] / total, 3),
         'weight_cost': round(final_w['cost'] / total, 3)
     }
+
+def calculate_topsis(df, weights_dict):
+    if len(df) == 0: return []
+    if len(df) == 1: return [1.0]
+
+    matrix = df[["cost", "filtration", "inhibition", "friction", "eco_score"]].values.astype(float)
+    col_sums = np.sqrt((matrix ** 2).sum(axis=0))
+    col_sums = np.where(col_sums == 0, 1e-10, col_sums)
+    norm_matrix = matrix / col_sums
+
+    w = np.array([
+        float(weights_dict.get('weight_cost') or 0.2), float(weights_dict.get('weight_filtration') or 0.2),
+        float(weights_dict.get('weight_inhibition') or 0.2), float(weights_dict.get('weight_friction') or 0.2),
+        float(weights_dict.get('weight_eco') or 0.2)
+    ])
+    weighted_matrix = norm_matrix * w
+
+    ideal_best = [weighted_matrix[:, 0].min(), weighted_matrix[:, 1].min(), weighted_matrix[:, 2].max(), weighted_matrix[:, 3].max(), weighted_matrix[:, 4].max()]
+    ideal_worst = [weighted_matrix[:, 0].max(), weighted_matrix[:, 1].max(), weighted_matrix[:, 2].min(), weighted_matrix[:, 3].min(), weighted_matrix[:, 4].min()]
+
+    dist_best = np.sqrt(((weighted_matrix - ideal_best) ** 2).sum(axis=1))
+    dist_worst = np.sqrt(((weighted_matrix - ideal_worst) ** 2).sum(axis=1))
+
+    denominator = dist_best + dist_worst
+    denominator = np.where(denominator == 0, 1e-10, denominator)
+    return dist_worst / denominator
 
 
 # 2. Реализация метода TOPSIS с жестким контролем MIN и MAX
