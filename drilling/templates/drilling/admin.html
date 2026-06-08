@@ -2,17 +2,20 @@
 {% block content %}
 
 <style>
-    /* Исправление рамки вкладок, чтобы она была полностью видна и аккуратна */
     #adminTabs .nav-link { border: 1px solid transparent !important; border-radius: 20px !important; color: #303030 !important; padding: 8px 20px !important; margin-right: 8px; }
     #adminTabs .nav-link.active { border: 1px solid #dcdcdc !important; background-color: #ffffff !important; font-weight: 700 !important; }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 style="margin-bottom: 0 !important; font-size: 1.5rem;">Ввод данных</h2>
-    <a href="/" class="btn" style="background-color: #f3671a !important; color: white !important; border: none !important; padding: 8px 20px !important;">Назад</a>
+<div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+    <h2 style="margin-bottom: 0 !important; font-size: 1.4rem; font-weight: 700; color: #303030;">
+        <i class="bi bi-sliders me-2" style="color: #f3671a;"></i>Панель управления
+    </h2>
+    <a href="/" class="btn btn-sm" style="background-color: #f3671a !important; color: white !important; border: none !important; padding: 6px 18px !important; border-radius: 20px; font-size: 13px; font-weight: 600;">
+        <i class="bi bi-arrow-left me-1"></i> На главную
+    </a>
 </div>
 
-<div class="card p-4">
+<div class="card p-4 shadow-sm">
 
     <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist" style="border-bottom: none !important;">
         {% if role == 'main_engineer' %}
@@ -43,7 +46,7 @@
                     <div class="col-md-1"><label style="font-size: 13px;">Темп.</label><input type="number" name="f_t_max" class="form-control" required></div>
                     <div class="col-md-1"><label style="font-size: 13px;">Ингиб.</label><input type="number" step="0.1" name="f_inh" class="form-control" required></div>
                     <div class="col-md-1"><label style="font-size: 13px;">Трение</label><input type="number" step="0.1" name="f_fric" class="form-control" required></div>
-                    <div class="col-md-1"><label style="font-size: 13px;">Эко</label><input type="number" name="f_eco" class="form-control" required></div>
+                    <div class="col-md-1"><label style="font-size: 13px;">Эколог.</label><input type="number" name="f_eco" class="form-control" required></div>
                     <div class="col-md-1" style="min-width: 120px;"><label style="font-size: 13px; white-space: nowrap;">Цена (руб./м³)</label><input type="number" step="1" name="f_cost" class="form-control" required></div>
 
                     <div class="col-auto text-center"><label style="font-size: 13px; visibility: hidden; display: block; margin-bottom: 0;">+</label><button type="submit" name="add_fluid" class="btn" style="background: transparent !important; color: #f3671a !important; border: none !important; font-size: 36px !important; font-weight: 700; padding: 0 10px !important; line-height: 1;">+</button></div>
@@ -139,26 +142,61 @@
         <div class="tab-pane fade" id="presets">
             {% if ahp_msg %}<div class="alert alert-{{ ahp_status|default:'info' }} text-center">{{ ahp_msg }}</div>{% endif %}
 
-            <div class="card mb-4 p-3" style="background-color: #fdfdfd; border-color: #f3671a;">
-                <h5 style="margin-bottom: 16px !important; color: #f3671a;">Расчет Мета-весов (Глобальные приоритеты)</h5>
+            <div class="card p-4 mb-4">
+                <h5 class="fw-bold mb-2" style="color: #303030;">Как вводить приоритеты:</h5>
+                <p class="mb-0 text-muted" style="font-size: 13px;">
+                    Сравните левый параметр с правым. <strong>1</strong> - параметры полностью равнозначны,  <strong>3</strong> - умеренное превосходство левого над правым,  <strong>5</strong> - существенное,  <strong>7</strong> - значительное,  <strong>9</strong> - абсолютное.<br>
+                    Если правый параметр важнее левого, выберите соответствующую дробь (например,  <strong>1/5</strong> означает, что правый параметр существенно важнее левого).
+                </p>
+            </div>
+
+            <div class="card p-4 mb-4">
+                <h5 class="fw-bold mb-4" style="color: #303030;">Расчет глобальных весов</h5>
                 <form method="post">
                     {% csrf_token %}
                     <div class="row mb-3">
                         {% with opts="<option value='9'>9</option><option value='7'>7</option><option value='5'>5</option><option value='3'>3</option><option value='1' selected>1</option><option value='1/3'>1/3</option><option value='1/5'>1/5</option><option value='1/7'>1/7</option><option value='1/9'>1/9</option>" %}
-                        <div class="col-md-4 d-flex justify-content-center align-items-center"><span class="text-end" style="flex: 1; font-size: 13px;">Интервал</span><select name="m_0_1" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Профиль</span></div>
-                        <div class="col-md-4 d-flex justify-content-center align-items-center"><span class="text-end" style="flex: 1; font-size: 13px;">Интервал</span><select name="m_0_2" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Осложнения</span></div>
-                        <div class="col-md-4 d-flex justify-content-center align-items-center"><span class="text-end" style="flex: 1; font-size: 13px;">Профиль</span><select name="m_1_2" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Осложнения</span></div>
+                        <div class="col-md-4 d-flex justify-content-center align-items-center">
+                            <span class="text-end" style="flex: 1; font-size: 13px;">Интервал</span>
+                            <select name="m_0_1" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select>
+                            <span class="text-start" style="flex: 1; font-size: 13px;">Профиль</span>
+                        </div>
+                        <div class="col-md-4 d-flex justify-content-center align-items-center">
+                            <span class="text-end" style="flex: 1; font-size: 13px;">Интервал</span>
+                            <select name="m_0_2" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select>
+                            <span class="text-start" style="flex: 1; font-size: 13px;">Осложнения</span>
+                        </div>
+                        <div class="col-md-4 d-flex justify-content-center align-items-center">
+                            <span class="text-end" style="flex: 1; font-size: 13px;">Профиль</span>
+                            <select name="m_1_2" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select>
+                            <span class="text-start" style="flex: 1; font-size: 13px;">Осложнения</span>
+                        </div>
                         {% endwith %}
                     </div>
-                    <div class="text-end"><button type="submit" name="update_meta_ahp" class="btn btn-sm" style="background-color: #303030 !important; color: white !important;">Пересчитать Мета-веса</button></div>
+                    <div class="text-end">
+                        <button type="submit" name="update_meta_ahp" class="btn btn-sm" style="background-color: #f3671a !important; color: white !important;">Рассчитать</button>
+                    </div>
                 </form>
+
                 {% if meta_weight %}
-                <div class="mt-2 text-muted" style="font-size: 12px;">Текущие: Интервал ({{ meta_weight.weight_interval|floatformat:"3" }}), Профиль ({{ meta_weight.weight_profile|floatformat:"3" }}), Осложнения ({{ meta_weight.weight_complication|floatformat:"3" }})</div>
+                <div class="mt-4">
+                    <p style="font-weight: 700; font-size: 13px; margin-bottom: 8px;">Текущие глобальные веса:</p>
+                    <table class="table table-sm">
+                        <thead><tr><th>Интервал</th><th>Профиль</th><th>Осложнения</th></tr></thead>
+                        <tbody>
+                            <tr>
+                                <td>{{ meta_weight.weight_interval|floatformat:"3"|default:"-" }}</td>
+                                <td>{{ meta_weight.weight_profile|floatformat:"3"|default:"-" }}</td>
+                                <td>{{ meta_weight.weight_complication|floatformat:"3"|default:"-" }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 {% endif %}
             </div>
 
             <div class="card mb-4 p-3">
-                <h5 style="margin-bottom: 16px !important;">Расчет локальных весов МАИ</h5>
+                <h5 style="margin-bottom: 16px !important;">Расчет локальных весов</h5>
                 <form method="post">
                     {% csrf_token %}
                     <div class="mb-4 col-md-6">
@@ -170,33 +208,37 @@
                         </select>
                     </div>
 
-                    <div class="alert mb-4" style="background-color: #fafafa; border: 1px solid #eee; border-radius: 15px; font-size: 13px; line-height: 1.6;">
-                        <span style="font-weight: 700; color: #f3671a;">Как вводить приоритеты:</span><br>
-                        Сравните левый параметр с правым. <b>1</b> — параметры полностью равнозначны. <b>3</b> — умеренное превосходство левого над правым, <b>5</b> — существенное, <b>7</b> — значительное, <b>9</b> — абсолютное. <br>
-                        <i>Если правый параметр важнее левого, выберите соответствующую дробь (например, <b>1/5</b> означает, что правый параметр существенно важнее левого).</i>
-                    </div>
-
                     <div class="row">
                         {% with opts="<option value='9'>9</option><option value='7'>7</option><option value='5'>5</option><option value='3'>3</option><option value='1' selected>1</option><option value='1/3'>1/3</option><option value='1/5'>1/5</option><option value='1/7'>1/7</option><option value='1/9'>1/9</option>" %}
                         <div class="col-md-6 border-end">
-                            <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Смета</span><select name="p_0_1" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Фильтрация</span></div>
-                            <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Смета</span><select name="p_0_2" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Ингибирование</span></div>
-                            <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Смета</span><select name="p_0_3" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Трение</span></div>
-                            <div class="d-flex justify-content-center align-items-center mb-4"><span class="text-end" style="flex: 1; font-size: 13px;">Смета</span><select name="p_0_4" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Экология</span></div>
+                            <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Стоимость</span><select name="p_0_1" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Фильтрация</span></div>
+                            <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Стоимость</span><select name="p_0_2" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Ингибирование</span></div>
+                            <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Стоимость</span><select name="p_0_3" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Трение</span></div>
+                            <div class="d-flex justify-content-center align-items-center mb-4"><span class="text-end" style="flex: 1; font-size: 13px;">Стоимость</span><select name="p_0_4" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Экологичность</span></div>
                             <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Фильтрация</span><select name="p_1_2" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Ингибирование</span></div>
                         </div>
                         <div class="col-md-6">
                             <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Фильтрация</span><select name="p_1_3" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Трение</span></div>
-                            <div class="d-flex justify-content-center align-items-center mb-4"><span class="text-end" style="flex: 1; font-size: 13px;">Фильтрация</span><select name="p_1_4" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Экология</span></div>
+                            <div class="d-flex justify-content-center align-items-center mb-4"><span class="text-end" style="flex: 1; font-size: 13px;">Фильтрация</span><select name="p_1_4" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Экологичность</span></div>
                             <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Ингибирование</span><select name="p_2_3" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Трение</span></div>
-                            <div class="d-flex justify-content-center align-items-center mb-4"><span class="text-end" style="flex: 1; font-size: 13px;">Ингибирование</span><select name="p_2_4" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Экология</span></div>
-                            <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Трение</span><select name="p_3_4" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Экология</span></div>
+                            <div class="d-flex justify-content-center align-items-center mb-4"><span class="text-end" style="flex: 1; font-size: 13px;">Ингибирование</span><select name="p_2_4" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Экологичность</span></div>
+                            <div class="d-flex justify-content-center align-items-center mb-3"><span class="text-end" style="flex: 1; font-size: 13px;">Трение</span><select name="p_3_4" class="form-select mx-3 text-center" style="width: 85px; flex: none;">{{ opts|safe }}</select><span class="text-start" style="flex: 1; font-size: 13px;">Экологичность</span></div>
                         </div>
                         {% endwith %}
                     </div>
                     <div class="text-end mt-2"><button type="submit" name="update_ahp_preset" class="btn" style="background-color: #f3671a !important; color: white !important;">Рассчитать</button></div>
                 </form>
             </div>
+
+            <h5 style="margin-bottom: 24px !important;">Текущие веса</h5>
+            <table class="table">
+                <thead><tr><th>Категория</th><th>Условие</th><th>Стоимость</th><th>Фильтрация</th><th>Ингиб.</th><th>Трение</th><th>Экологичность</th></tr></thead>
+                <tbody>
+                    {% for p in interval_presets %}<tr><td>Интервал</td><td>{{ p.name }}</td><td>{{ p.weight_cost|floatformat:"3" }}</td><td>{{ p.weight_filtration|floatformat:"3" }}</td><td>{{ p.weight_inhibition|floatformat:"3" }}</td><td>{{ p.weight_friction|floatformat:"3" }}</td><td>{{ p.weight_eco|floatformat:"3" }}</td></tr>{% endfor %}
+                    {% for pr in profile_presets %}<tr><td>Профиль</td><td>{{ pr.name }}</td><td>{{ pr.weight_cost|floatformat:"3" }}</td><td>{{ pr.weight_filtration|floatformat:"3" }}</td><td>{{ p.weight_inhibition|floatformat:"3" }}</td><td>{{ pr.weight_friction|floatformat:"3" }}</td><td>{{ pr.weight_eco|floatformat:"3" }}</td></tr>{% endfor %}
+                    {% for c in comp_presets %}<tr><td>Осложнение</td><td>{{ c.name }}</td><td>{{ c.weight_cost|floatformat:"3" }}</td><td>{{ c.weight_filtration|floatformat:"3" }}</td><td>{{ c.weight_inhibition|floatformat:"3" }}</td><td>{{ c.weight_friction|floatformat:"3" }}</td><td>{{ c.weight_eco|floatformat:"3" }}</td></tr>{% endfor %}
+                </tbody>
+            </table>
         </div>
         {% endif %}
 
@@ -221,14 +263,18 @@
                 <h5 style="margin-bottom: 16px !important;">Зарегистрировать пользователя</h5>
                 <form method="post" class="row g-2 align-items-end">
                     {% csrf_token %}
-                    <div class="col-md-3"><label style="font-size: 13px;">Логин</label><input type="text" name="new_username" class="form-control" required></div>
-                    <div class="col-md-3"><label style="font-size: 13px;">Пароль</label><input type="password" name="new_password" class="form-control" required></div>
+                    <div class="col-md-2"><label style="font-size: 13px;">Логин</label><input type="text" name="new_username" class="form-control" required></div>
+                    <div class="col-md-2"><label style="font-size: 13px;">Пароль</label><input type="password" name="new_password" class="form-control" required></div>
 
-                    <div class="col-md-3">
+                    <div class="col-md-3"><label style="font-size: 13px;">ФИО</label><input type="text" name="new_full_name" class="form-control" required></div>
+
+                    <div class="col-md-2">
                         <label style="font-size: 13px;">Роль</label>
                         <input list="role_list" name="new_role" class="form-control" required placeholder="Выберите или введите">
                         <datalist id="role_list">
-                            <option value="engineer"><option value="main_engineer"><option value="admin">
+                            <option value="engineer">
+                            <option value="main_engineer">
+                            <option value="admin">
                         </datalist>
                     </div>
 
@@ -262,6 +308,7 @@
 </div>
 
 <script>
+    // JS СОХРАНЕНИЯ АКТИВНОЙ ВКЛАДКИ
     document.addEventListener("DOMContentLoaded", function() {
         let activeTab = localStorage.getItem('activeAdminTab');
         if(activeTab){
@@ -271,7 +318,8 @@
                 tab.show();
             }
         }
-        document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(function(tabEl){
+        let tabEls = document.querySelectorAll('button[data-bs-toggle="tab"]');
+        tabEls.forEach(function(tabEl){
             tabEl.addEventListener('shown.bs.tab', function(event){
                 localStorage.setItem('activeAdminTab', event.target.getAttribute('data-bs-target'));
             });

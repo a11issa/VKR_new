@@ -48,7 +48,7 @@ def dashboard(request):
     if request.method == 'POST' and 'new_project' in request.POST:
         Project.objects.create(user=user, name=request.POST.get('project_name'), created_at=now())
         return redirect('dashboard')
-    projects = Project.objects.filter(user=user).order_by('-created_at')
+    projects = Project.objects.filter(user=user, is_deleted=False).order_by('-created_at')
     return render(request, 'drilling/dashboard.html',
                   {'projects': projects, 'username': user.username, 'role': user.role})
 
@@ -106,7 +106,7 @@ def project_detail(request, pk):
                 if row['filtration'] > df.sort_values('rating', ascending=False).iloc[0]['filtration']: reasons.append(
                     "выше водоотдача")
 
-                reason_str = ", ".join(reasons[:2]) or "незначительное отставание по весам TOPSIS"
+                reason_str = ", ".join(reasons[:2]) or "незначительное отставание"
                 _, alt_recipe, alt_total_cost, _ = get_recipe_data(int(row['id']), it.req_density_min, it.diameter,
                                                                    it.depth, it.t_zab, it.complications_list or "")
 
@@ -147,7 +147,7 @@ def project_detail(request, pk):
             form_data['diameter'] if form_data['diameter'].strip() else 0.0), float(form_data['p_pl'] or 0.0), float(
             form_data['t_zab'] or 0.0), float(form_data['angle'] or 0.0)
         complications = form_data['complications']
-        if form_data['fluid_type'] == 'Газ' and 'Газ' not in complications: complications.append('Газ')
+        if form_data['fluid_type'] == 'Gas' and 'Газ' not in complications: complications.append('Газ')
 
         rho_min, rho_max, dp_sigma, p_g, p_pogl, p_gr, err = calculate_physics(H, D, P_pl,
                                                                                form_data['fluid_type'] == 'Газ')
@@ -192,6 +192,19 @@ def project_detail(request, pk):
                    'username': user.username, 'role': user.role})
 
 
+def delete_project(request, project_id):
+    if 'user_id' not in request.session:
+        return redirect('login')
+
+    project = get_object_or_404(Project, id=project_id)
+
+    if project.user_id == request.session.get('user_id'):
+        # Вместо физического удаления просто "прячем" проект
+        project.is_deleted = True
+        project.save()
+
+    return redirect('dashboard')
+
 @custom_login_required
 def delete_interval(request, pk, proj_id):
     CalculationHistory.objects.filter(pk=pk).delete()
@@ -210,120 +223,209 @@ def export_pdf(request, pk):
     def safe_text(text, max_w):
         text = str(text)
         if pdf.get_string_width(text) <= max_w: return text
-        while len(text) > 0 and pdf.get_string_width(text + "...") > max_w: text = text[:-1]
+        while len(text) > 0 and pdf.get_string_width(text + "...") > max_w:
+            text = text[:-1]
         return text + "..."
 
     for it in intervals_db:
         pdf.add_page()
         if os.path.exists(font_path):
-            pdf.add_font('Roboto', '', font_path, uni=True); pdf.set_font('Roboto', size=11)
+            pdf.add_font('Roboto', '', font_path, uni=True)
+            pdf.set_font('Roboto', size=11)
         else:
             pdf.set_font('Helvetica', size=11)
 
-        V, recipe, cost, _ = get_recipe_data(it.selected_fluid.id, it.req_density_min, it.diameter, it.depth, it.t_zab,
-                                             it.complications_list or "")
+        V, recipe, cost_total, cost_m3 = get_recipe_data(it.selected_fluid.id, it.req_density_min, it.diameter,
+                                                         it.depth, it.t_zab, it.complications_list or "")
         is_gas = 'Газ' in (it.complications_list or "")
         _, rho_max, dp_sigma, p_g, p_pogl, p_gr, _ = calculate_physics(it.depth, it.diameter, it.p_pl, is_gas)
         target_props = get_calculated_properties(it.req_density_min, it.angle, dp_sigma)
+        is_productive = 'Продуктивный' in it.interval_type
 
-        # ШАПКА
+        fluids_alt = Fluid.objects.filter(temp_max__gte=it.t_zab, density_max__gte=it.req_density_min,
+                                          density_min__lte=rho_max, is_drill_in_fluid=is_productive)
+        alternatives = []
+        if fluids_alt.exists():
+            weights = {'weight_filtration': it.final_w_filtration, 'weight_inhibition': it.final_w_inhibition,
+                       'weight_friction': it.final_w_friction, 'weight_eco': it.final_w_eco,
+                       'weight_cost': it.final_w_cost}
+            fluid_list = []
+            for f in fluids_alt:
+                f_dict = f.__dict__.copy()
+                _, _, _, dyn_cost_m3 = get_recipe_data(f.id, it.req_density_min, it.diameter, it.depth, it.t_zab,
+                                                       it.complications_list or "")
+                f_dict['cost'] = dyn_cost_m3
+                fluid_list.append(f_dict)
+
+            df = pd.DataFrame(fluid_list)
+            df['rating'] = calculate_topsis(df, weights)
+            df_sorted = df.sort_values('rating', ascending=False)
+            best_cost = df_sorted.iloc[0]['cost']
+
+            place = 2
+            for _, row in df_sorted.head(3).iloc[1:].iterrows():
+                reasons = []
+                if row['cost'] > best_cost * 1.05: reasons.append(f"дороже на {int(row['cost'] - best_cost)} руб/м³")
+                if row['eco_score'] < df_sorted.iloc[0]['eco_score']: reasons.append("ниже экологичность")
+                if row['filtration'] > df_sorted.iloc[0]['filtration']: reasons.append("выше водоотдача")
+
+                reason_str = ", ".join(reasons[:2]) or "отставание по параметрам"
+                alt_V, alt_recipe, alt_total_cost, alt_cost_m3 = get_recipe_data(int(row['id']), it.req_density_min,
+                                                                                 it.diameter, it.depth, it.t_zab,
+                                                                                 it.complications_list or "")
+
+                alternatives.append({
+                    'place': place,
+                    'is_main': False,
+                    'name': row['name'],
+                    'base_type': row['base_type'],
+                    'cost_m3': round(alt_cost_m3, 0),
+                    'total_cost': round(alt_total_cost, 0),
+                    'recipe': alt_recipe,
+                    'density_min': row['density_min'],
+                    'density_max': row['density_max'],
+                    'temp_max': row['temp_max'],
+                    'filtration': row['filtration'],
+                    'inhibition': row['inhibition'],
+                    'reason': reason_str.capitalize()
+                })
+                place += 1
+
+        all_fluids_to_print = [{
+            'place': 1, 'is_main': True, 'name': it.selected_fluid.name, 'base_type': it.selected_fluid.base_type,
+            'density_min': it.selected_fluid.density_min, 'density_max': it.selected_fluid.density_max,
+            'temp_max': it.selected_fluid.temp_max, 'filtration': it.selected_fluid.filtration,
+            'inhibition': it.selected_fluid.inhibition, 'cost_m3': cost_m3, 'total_cost': cost_total,
+            'recipe': recipe, 'reason': 'Оптимальный выбор по заданным критериям'
+        }]
+        all_fluids_to_print.extend(alternatives)
+
+        # ТИТУЛЬНАЯ ШАПКА
         pdf.set_font(pdf.font_family, size=16)
-        pdf.cell(0, 10, txt="ПРОГРАММА ПРОМЫВКИ СКВАЖИНЫ", ln=True, align='C')
-        pdf.ln(5)
-        pdf.set_font(pdf.font_family, size=11)
-        pdf.cell(100, 6, txt=safe_text(f"Проект: {project.name}", 98))
-        pdf.cell(90, 6, txt=f"Дата: {now().strftime('%d.%m.%Y')}", ln=True)
-        pdf.cell(100, 6, txt=safe_text(f"Инженер: {user.full_name}", 98))
+        pdf.cell(0, 10, txt="ОТЧЕТ", ln=True, align='C')
+        pdf.ln(2)
+        pdf.set_font(pdf.font_family, size=10)
+        pdf.cell(100, 5, txt=safe_text(f"Проект / Скважина: {project.name}", 98))
+        pdf.cell(90, 5, txt=f"Дата: {now().strftime('%d.%m.%Y %H:%M')}", ln=True, align='R')
+        pdf.cell(100, 5, txt=safe_text(f"Инженер: {user.full_name or user.username}", 98), ln=True)
         pdf.line(10, pdf.get_y() + 2, 200, pdf.get_y() + 2)
-        pdf.ln(8)
-
-        # ЗАГОЛОВОК ИНТЕРВАЛА
-        pdf.set_font(pdf.font_family, size=14)
-        pdf.cell(0, 8, txt=safe_text(f"ИНТЕРВАЛ: {it.interval_name} (до {it.depth} м)", 190), ln=True)
-        pdf.set_font(pdf.font_family, size=12)
-        pdf.cell(0, 7, txt=safe_text(f"1. {it.selected_fluid.name}", 190), ln=True)
-        pdf.cell(0, 7, txt=f"Объем: {V} м3 | Стоимость: {cost:,.0f} руб.", ln=True)
-        pdf.ln(5)
-
-        # 3 БЛОКА КАК В ИНТЕРФЕЙСЕ (ВЕРТИКАЛЬНО ДЛЯ НАДЕЖНОСТИ В PDF)
-        pdf.set_font(pdf.font_family, size=11)
-
-        pdf.cell(0, 6, txt="ИСХОДНЫЕ ДАННЫЕ:", ln=True)
-        pdf.set_font(pdf.font_family, size=10)
-        pdf.cell(0, 5, txt=f"Диаметр долота: {it.diameter} мм | P пласта: {it.p_pl} МПа | T забоя: {it.t_zab} C",
-                 ln=True)
-        pdf.cell(0, 5,
-                 txt=f"Профиль: {it.well_profile} ({it.angle} град.) | Осложнения: {it.complications_list or 'Нет'}",
-                 ln=True)
-        pdf.ln(4)
-
-        pdf.set_font(pdf.font_family, size=11)
-        pdf.cell(0, 6, txt="РЕЗУЛЬТАТ ПОДБОРА:", ln=True)
-        pdf.set_font(pdf.font_family, size=10)
-        pdf.cell(0, 5,
-                 txt=f"Основа: {it.selected_fluid.base_type} | Плотность: {it.selected_fluid.density_min}-{it.selected_fluid.density_max} г/см3 | T макс: {it.selected_fluid.temp_max} C",
-                 ln=True)
-        pdf.cell(0, 5,
-                 txt=f"Водоотдача: {it.selected_fluid.filtration} см3 | Ингибирование: {it.selected_fluid.inhibition} у.е.",
-                 ln=True)
-        pdf.ln(4)
-
-        pdf.set_font(pdf.font_family, size=11)
-        pdf.cell(0, 6, txt="РАСЧЕТ ПАРАМЕТРОВ:", ln=True)
-        pdf.set_font(pdf.font_family, size=10)
-        pdf.cell(0, 5, txt=f"P погл: {p_pogl} МПа | P гр: {p_gr} МПа | Тр. плотность: {it.req_density_min} г/см3",
-                 ln=True)
-        pdf.cell(0, 5,
-                 txt=f"Пл. вязкость: {target_props['viscosity']} мПа*с | ДНС: {target_props['tau_0']} дПа | Макс. водоотдача: {target_props['filtration']} см3",
-                 ln=True)
         pdf.ln(6)
 
-        # РЕЦЕПТУРА
-        pdf.set_font(pdf.font_family, size=11)
-        pdf.cell(0, 6, txt="Детализация рецептуры:", ln=True)
+        # ИНТЕРВАЛ И ГЕОЛОГИЯ (Шапка серая)
+        pdf.set_fill_color(220, 220, 220)
+        pdf.set_font(pdf.font_family, size=12)
+        pdf.cell(190, 8,
+                 txt=safe_text(f" ИНТЕРВАЛ: {it.interval_name} (Глубина: {it.depth} м, Диаметр: {it.diameter} мм)",
+                               188), ln=True, fill=True, border=1)
+
         pdf.set_font(pdf.font_family, size=9)
-        pdf.cell(70, 7, txt="Наименование", border=1, fill=True)
-        pdf.cell(60, 7, txt="Назначение", border=1, fill=True)
-        pdf.cell(30, 7, txt="Конц. (кг/м3)", border=1, align='C', fill=True)
-        pdf.cell(30, 7, txt="Цена (руб/кг)", border=1, ln=True, align='C', fill=True)
 
-        for r in recipe:
-            try:
-                price_kg = Reagent.objects.get(name=r['name']).price_kg
-            except:
-                price_kg = 0.0
+        # Строка 1
+        pdf.cell(45, 6, txt="Тип интервала:", border=1)
+        pdf.cell(50, 6, txt=safe_text(it.interval_type if it.interval_type else "Нормальные условия", 48), border=1)
+        pdf.cell(45, 6, txt="Плотн. поглощения:", border=1)
+        pdf.cell(50, 6, txt=f"{p_pogl} МПа", border=1, ln=True)
+        # Строка 2
+        pdf.cell(45, 6, txt="Профиль скважины:", border=1)
+        pdf.cell(50, 6, txt=f"{it.well_profile} ({it.angle}°)", border=1)
+        pdf.cell(45, 6, txt="Давл. гидроразрыва:", border=1)
+        pdf.cell(50, 6, txt=f"{p_gr} МПа", border=1, ln=True)
+        # Строка 3
+        pdf.cell(45, 6, txt="Пластовое давление:", border=1)
+        pdf.cell(50, 6, txt=f"{it.p_pl} МПа", border=1)
+        pdf.cell(45, 6, txt="Треб. плотность:", border=1)
+        pdf.cell(50, 6, txt=f"{it.req_density_min} г/см³", border=1, ln=True)
+        # Строка 4
+        pdf.cell(45, 6, txt="Температура забоя:", border=1)
+        pdf.cell(50, 6, txt=f"{it.t_zab} °C", border=1)
+        pdf.cell(45, 6, txt="Пласт. вязкость:", border=1)
+        pdf.cell(50, 6, txt=f"{target_props['viscosity']} мПа·с", border=1, ln=True)
+        # Строка 5
+        pdf.cell(45, 6, txt="Осложнения:", border=1)
+        pdf.cell(145, 6, txt=safe_text(it.complications_list or "Нет осложнений", 143), border=1, ln=True)
+        pdf.ln(6)
 
-            pdf.cell(70, 7, txt=safe_text(r['name'], 68), border=1)
-            pdf.cell(60, 7, txt=safe_text(r['func'], 58), border=1)
-            pdf.cell(30, 7, txt=str(r['mass']), border=1, align='C')
-            pdf.cell(30, 7, txt=str(price_kg), border=1, ln=True, align='C')
+        # ЦИКЛ ПО ВСЕМ РАСТВОРАМ (Все шапки серые, строгая структура)
+        for fl in all_fluids_to_print:
+            if pdf.get_y() > 220:
+                pdf.add_page()
+
+            # Заголовок пункта (строго серый)
+            pdf.set_fill_color(220, 220, 220)
+            pdf.set_font(pdf.font_family, size=11)
+            pdf.cell(190, 8, txt=safe_text(f"Пункт {fl['place']}. Раствор: {fl['name']}", 188), ln=True, fill=True,
+                     border=1)
+
+            # Таблица технических и экономических параметров
+            pdf.set_font(pdf.font_family, size=9)
+
+            # 1 строка параметров
+            pdf.cell(35, 6, txt="Основа:", border=1)
+            pdf.cell(60, 6, txt=safe_text(fl['base_type'], 58), border=1)
+            pdf.cell(45, 6, txt="Плотность (г/см³):", border=1)
+            pdf.cell(50, 6, txt=f"{fl['density_min']} - {fl['density_max']}", border=1, ln=True)
+
+            # 2 строка параметров
+            pdf.cell(35, 6, txt="Макс. темп. (°C):", border=1)
+            pdf.cell(60, 6, txt=f"{fl['temp_max']}", border=1)
+            pdf.cell(45, 6, txt="Водоотд. / Ингиб.:", border=1)
+            pdf.cell(50, 6, txt=f"{fl['filtration']} / {fl['inhibition']}", border=1, ln=True)
+
+            # 3 строка параметров
+            pdf.cell(35, 6, txt="Цена за м³:", border=1)
+            pdf.cell(60, 6, txt=f"{fl['cost_m3']:,.0f} руб.", border=1)
+            pdf.cell(45, 6, txt="Итоговая цена:", border=1)
+            pdf.cell(50, 6, txt=f"{fl['total_cost']:,.0f} руб.", border=1, ln=True)
+
+            pdf.ln(2)
+
+            # ТАБЛИЦА РЕЦЕПТУРЫ (Шапка строго серая)
+            pdf.set_fill_color(220, 220, 220)
+            pdf.cell(80, 6, txt="Наименование реагента", border=1, fill=True)
+            pdf.cell(50, 6, txt="Назначение", border=1, fill=True)
+            pdf.cell(30, 6, txt="Конц. (кг/м³)", border=1, align='C', fill=True)
+            pdf.cell(30, 6, txt="Расход (кг)", border=1, ln=True, align='C', fill=True)
+
+            if not fl['recipe']:
+                pdf.cell(190, 6, txt="Рецептура для данного раствора не задана.", border=1, ln=True, align='C')
+            else:
+                for r in fl['recipe']:
+                    if pdf.get_y() > 270:
+                        pdf.add_page()
+
+                    total_mass = float(r['mass']) * V
+                    pdf.cell(80, 6, txt=safe_text(r['name'], 78), border=1)
+                    pdf.cell(50, 6, txt=safe_text(r['func'], 48), border=1)
+                    pdf.cell(30, 6, txt=f"{r['mass']}", border=1, align='C')
+                    pdf.cell(30, 6, txt=f"{total_mass:,.1f}", border=1, ln=True, align='C')
+
+            pdf.ln(6)
 
     pdf_bytes = pdf.output()
     response = HttpResponse(bytes(pdf_bytes), content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="Mud_Program_{project.id}.pdf"'
+    response['Content-Disposition'] = f'attachment; filename="Report_{project.id}.pdf"'
     return response
 
 
 @custom_login_required
 def admin_panel(request):
     role = request.session.get('role')
-    # Доступ разрешен и админу, и главному инженеру
     if role not in ['admin', 'main_engineer']:
         return redirect('dashboard')
 
     if request.method == 'POST':
-        # Проверка прав: Админ может только работать с пользователями
+        # --- ИСПРАВЛЕНИЕ: Добавлен сбор и сохранение ФИО нового пользователя ---
         if role == 'admin' and 'add_user' in request.POST:
             u = request.POST.get('new_username')
             p = request.POST.get('new_password')
-            r = request.POST.get('new_role')  # Роль теперь может быть любой строкой
+            r = request.POST.get('new_role')
+            f = request.POST.get('new_full_name')  # Забираем ФИО из формы
             hashed_p = hashlib.sha256(p.encode()).hexdigest()
-            CustomUser.objects.create(username=u, password_hash=hashed_p, role=r)
+            CustomUser.objects.create(username=u, password_hash=hashed_p, role=r, full_name=f)
 
         elif role == 'admin' and 'delete_user' in request.POST:
             CustomUser.objects.filter(id=request.POST.get('delete_user')).delete()
 
-        # Права Главного инженера: Растворы, Реагенты, Рецептуры, МАИ
         elif role == 'main_engineer':
             if 'add_fluid' in request.POST:
                 Fluid.objects.create(name=request.POST.get('f_name'), base_type=request.POST.get('f_base'),
@@ -342,19 +444,19 @@ def admin_panel(request):
                                            concentration=request.POST.get('recipe_conc'),
                                            comment=request.POST.get('recipe_comment'))
 
-            # Стандартное МАИ (5x5)
+            # Обновление локальных весов МАИ
             elif 'update_ahp_preset' in request.POST:
                 p_id = request.POST.get('preset_selector')
                 preset = LocalWeight.objects.get(id=p_id)
 
-                def parse_saaty(val_name):
+                def get_weight_value(val_name):
                     val = request.POST.get(val_name, '1');
                     return float(val.split('/')[0]) / float(val.split('/')[1]) if '/' in val else float(val)
 
-                m01, m02, m03, m04 = parse_saaty('p_0_1'), parse_saaty('p_0_2'), parse_saaty('p_0_3'), parse_saaty(
+                m01, m02, m03, m04 = get_weight_value('p_0_1'), get_weight_value('p_0_2'), get_weight_value('p_0_3'), get_weight_value(
                     'p_0_4')
-                m12, m13, m14 = parse_saaty('p_1_2'), parse_saaty('p_1_3'), parse_saaty('p_1_4')
-                m23, m24, m34 = parse_saaty('p_2_3'), parse_saaty('p_2_4'), parse_saaty('p_3_4')
+                m12, m13, m14 = get_weight_value('p_1_2'), get_weight_value('p_1_3'), get_weight_value('p_1_4')
+                m23, m24, m34 = get_weight_value('p_2_3'), get_weight_value('p_2_4'), get_weight_value('p_3_4')
 
                 matrix = np.array(
                     [[1.0, m01, m02, m03, m04], [1.0 / m01, 1.0, m12, m13, m14], [1.0 / m02, 1.0 / m12, 1.0, m23, m24],
@@ -362,36 +464,38 @@ def admin_panel(request):
                 weights, cr = calculate_ahp_weights(matrix)
 
                 if cr > 0.1:
-                    request.session['ahp_msg'] = f"ОШИБКА: Матрица противоречива (CR = {cr})."; request.session[
+                    request.session['ahp_msg'] = f"Ошибка: данные противоречивы (ИС = {cr}).";
+                    request.session[
                         'ahp_status'] = "danger"
                 else:
-                    request.session['ahp_msg'] = f"УСПЕХ: Веса сохранены! CR = {cr}";
+                    request.session['ahp_msg'] = f"Данные сохранены. CR = {cr}";
                     request.session['ahp_status'] = "success"
                     preset.weight_cost, preset.weight_filtration, preset.weight_inhibition, preset.weight_friction, preset.weight_eco = weights
                     preset.save()
 
-            # МАИ для МЕТА-ВЕСОВ (3x3)
-            elif 'update_meta_ahp' in request.POST:
-                def parse_saaty(val_name):
+            # Обновление глобальных весов МАИ
+            elif 'update_glob_ahp' in request.POST:
+                def get_weight_value(val_name):
                     val = request.POST.get(val_name, '1');
                     return float(val.split('/')[0]) / float(val.split('/')[1]) if '/' in val else float(val)
 
-                m01 = parse_saaty('m_0_1')  # Интервал vs Профиль
-                m02 = parse_saaty('m_0_2')  # Интервал vs Осложнения
-                m12 = parse_saaty('m_1_2')  # Профиль vs Осложнения
+                m01 = get_weight_value('m_0_1')
+                m02 = get_weight_value('m_0_2')
+                m12 = get_weight_value('m_1_2')
 
                 matrix = np.array([[1.0, m01, m02], [1.0 / m01, 1.0, m12], [1.0 / m02, 1.0 / m12, 1.0]])
                 weights, cr = calculate_ahp_weights(matrix)
 
                 if cr > 0.1:
-                    request.session['ahp_msg'] = f"ОШИБКА МЕТА-ВЕСОВ: CR = {cr}."; request.session[
+                    request.session['ahp_msg'] = f"Ошибка: данные противоречивы. ИС = {cr}.";
+                    request.session[
                         'ahp_status'] = "danger"
                 else:
                     request.session[
-                        'ahp_msg'] = f"МЕТА-ВЕСА СОХРАНЕНЫ! Интервал: {weights[0]}, Профиль: {weights[1]}, Осложн: {weights[2]}";
+                        'ahp_msg'] = f"Веса сохранены. Интервал: {weights[0]:.3f}, Профиль: {weights[1]:.3f}, Осложн: {weights[2]:.3f}";
                     request.session['ahp_status'] = "success"
                     base = BaseWeight.objects.first()
-                    if not base: meta = BaseWeight()
+                    if not base: base = BaseWeight()
                     base.weight_interval, base.weight_profile, base.weight_complication = weights
                     base.save()
 

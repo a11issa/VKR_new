@@ -6,9 +6,10 @@
     <title>Fluid selection</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
     <style>
-        /* 1. ПОДКЛЮЧАЕМ ЛОКАЛЬНЫЙ ШРИФТ MONTSERRAT */
+        /* 1. ШРИФТЫ */
         @font-face {
             font-family: 'Montserrat';
             src: url('/static/Montserrat-Regular.ttf') format('truetype');
@@ -22,149 +23,199 @@
             font-style: normal;
         }
 
-        /* 2. БАЗОВЫЕ НАСТРОЙКИ (Шрифт и отсутствие теней) */
-        * {
-            font-family: 'Montserrat', sans-serif !important;
-            box-shadow: none !important;
-        }
-
-        /* 3. УМЕНЬШАЕМ ОСНОВНОЙ ТЕКСТ (до 14px) */
-        body, .form-control, .form-select, .btn, .table, .nav-tabs .nav-link, .list-group-item, span, label {
-            font-size: 14px !important;
-        }
-
+        /* 2. БАЗОВЫЕ НАСТРОЙКИ */
         body {
-            background-color: #f7f7f7 !important;
+            font-family: 'Montserrat', sans-serif;
+            background-color: #f7f7f7;
             color: #000000;
+            font-size: 14px;
         }
 
-        /* 4. АБСОЛЮТНО ВСЕ ЗАКРУГЛЯЕМ */
+        /* Принудительно применяем шрифт к элементам форм Bootstrap */
+        input, button, select, .table, .nav-link, .list-group-item, label {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 14px;
+        }
+
+        /* Убираем синее свечение Bootstrap при клике и ставим оранжевое */
+        .form-control:focus, .form-select:focus, .btn:focus {
+            box-shadow: 0 0 0 0.25rem rgba(243, 103, 26, 0.25);
+            border-color: #f3671a;
+        }
+
+        /* 3. ЗАКРУГЛЕНИЯ */
         .card, .form-control, .form-select, .alert, .nav-tabs .nav-link, .list-group-item {
-            border-radius: 20px !important;
+            border-radius: 20px;
         }
         .btn {
-            border-radius: 30px !important;
+            border-radius: 30px;
         }
-
         .table {
-            border-radius: 20px !important;
-            overflow: hidden !important;
-            border-collapse: separate !important;
-            border-spacing: 0 !important;
-            border: 1px solid #dcdcdc !important;
+            border-radius: 20px;
+            overflow: hidden;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid #dcdcdc;
         }
 
-        /* 5. ЖИРНЫЕ ЗАГОЛОВКИ, ОТСТУПЫ И ИХ УМЕНЬШЕННЫЙ РАЗМЕР */
+        /* 4. ЗАГОЛОВКИ */
         h1, h2, h3, h4, h5, h6, .card-header, legend {
-            margin-bottom: 32px !important;
-            font-weight: 700 !important;
+            margin-bottom: 32px;
+            font-weight: 700;
             color: #000000;
-            border-bottom: none !important;
-            background-color: transparent !important;
+            border-bottom: none;
+            background-color: transparent;
         }
+        h2 { font-size: 1.5rem; }
+        h3 { font-size: 1.25rem; }
+        h4 { font-size: 1.1rem; }
+        h5, h6 { font-size: 1rem; }
 
-        /* Размеры заголовков */
-        h2 { font-size: 1.5rem !important; }
-        h3 { font-size: 1.25rem !important; }
-        h4 { font-size: 1.1rem !important; }
-        h5, h6 { font-size: 1rem !important; }
-
-        /* 6. ШАПКА САЙТА И ШАПКИ ТАБЛИЦ (ЦВЕТ #303030) */
+        /* 5. ШАПКА САЙТА И ШАПКИ ТАБЛИЦ */
         .header {
-            background-color: #303030 !important;
-            margin-bottom: 32px !important;
+            background-color: #303030;
+            margin-bottom: 32px;
             padding: 20px 0;
-            border-radius: 0 0 24px 24px !important;
+            border-radius: 0 0 24px 24px;
         }
         .navbar-brand {
-            color: #ffffff !important;
-            font-weight: 700 !important;
-            font-size: 16px !important; /* Название сайта чуть больше основного текста */
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 16px;
+        }
+        .navbar-brand:hover {
+            color: #ffffff;
         }
 
-        /* Кнопки в шапке: прозрачный фон и оранжевый текст */
+        /* Кнопки в шапке (прозрачные) */
         .header .btn {
-            background-color: transparent !important;
-            color: #f3671a !important;
-            font-weight: 700 !important;
-            padding: 6px 16px !important;
-            border: none !important;
+            background-color: transparent;
+            color: #f3671a;
+            font-weight: 700;
+            padding: 6px 16px;
+            border: none;
         }
         .header .btn:hover {
-            background-color: rgba(243, 103, 26, 0.1) !important;
+            background-color: rgba(243, 103, 26, 0.1);
+            color: #f3671a;
         }
 
-        /* Шапка таблицы */
-        th, .table thead th {
-            font-weight: 700 !important;
-            text-align: center !important;
-            vertical-align: middle !important;
-            background-color: #303030 !important;
-            color: #ffffff !important;
-            border: 1px solid #303030 !important;
-            padding: 16px !important;
+        /* Таблицы */
+        .table thead th {
+            font-weight: 700;
+            text-align: center;
+            vertical-align: middle;
+            background-color: #303030;
+            color: #ffffff;
+            border: 1px solid #303030;
+            padding: 16px;
+        }
+        .table tbody td {
+            text-align: center;
+            vertical-align: middle;
+            color: #000000;
+            border: 1px solid #dcdcdc;
+            padding: 12px;
         }
 
-        /* Тело таблицы */
-        td, .table tbody td {
-            text-align: center !important;
-            vertical-align: middle !important;
-            color: #000000 !important;
-            border: 1px solid #dcdcdc !important;
-            padding: 12px !important;
-        }
-
-        /* 7. ГЛОБАЛЬНЫЕ КНОПКИ (ЦВЕТ #f3671a) */
+        /* 6. ГЛОБАЛЬНЫЕ КНОПКИ (Оранжевые) */
         .btn {
-            background-color: #f3671a !important;
-            color: #ffffff !important;
-            border: none !important;
-            font-weight: 700 !important;
-            padding: 10px 24px !important;
-            transition: transform 0.1s, opacity 0.2s !important;
+            background-color: #f3671a;
+            color: #ffffff;
+            border: none;
+            font-weight: 700;
+            padding: 10px 24px;
+            transition: transform 0.1s, opacity 0.2s;
         }
         .btn:hover {
-            opacity: 0.85 !important;
-            color: #ffffff !important;
+            background-color: #d15613; /* Чуть темнее при наведении */
+            color: #ffffff;
             transform: scale(0.98);
         }
 
-        /* 8. КАРТОЧКИ И ФОРМЫ */
+        /* 7. КАРТОЧКИ И ВСТРОЕННЫЕ КОМПОНЕНТЫ */
         .card, .form-control, .form-select, .list-group-item, .alert {
-            background-color: #ffffff !important;
-            border: 1px solid #e0e0e0 !important;
-            color: #000000 !important;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            color: #000000;
         }
 
+        /* Вкладки навигации */
         .nav-tabs {
-            border-bottom: 2px solid #e0e0e0 !important;
-            margin-bottom: 32px !important;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 32px;
         }
         .nav-tabs .nav-link {
-            border: 1px solid transparent !important;
-            color: #000000 !important;
-            font-weight: 400 !important;
+            border: 1px solid transparent;
+            color: #000000;
+            font-weight: 400;
             padding: 10px 20px;
         }
-        .nav-tabs .nav-link.active {
-            border-color: #e0e0e0 #e0e0e0 #ffffff !important;
-            border-bottom: 1px solid #ffffff !important;
-            font-weight: 700 !important;
-            background-color: #ffffff !important;
+        /* Переопределяем активную вкладку Bootstrap */
+        .nav-tabs .nav-link.active, .nav-tabs .nav-item.show .nav-link {
+            border-color: #e0e0e0 #e0e0e0 #ffffff;
+            border-bottom: 1px solid #ffffff;
+            font-weight: 700;
+            background-color: #ffffff;
+            color: #000000;
+        }
+        /* Убираем общую рамку у контейнера, чтобы она не конфликтовала */
+        .list-group {
+            border: none !important;
+            background: transparent !important;
+            border-radius: 0 !important;
+        }
+
+        /* 1. Делаем ВСЕ проекты одинаковыми закругленными прямоугольниками */
+        .list-group-item {
+            border-radius: 20px !important;
+            border: 1px solid #e0e0e0 !important;
+            /* Накладываем элементы друг на друга на 1 пиксель,
+               чтобы между ними была одна ровная линия, а не жирная двойная рамка */
+            margin-bottom: -1px;
+        }
+
+        /* 2. Принудительно запрещаем Bootstrap выпрямлять первый и последний элементы */
+        .list-group-item:first-child,
+        .list-group-item:last-child {
+            border-radius: 20px !important;
         }
     </style>
 </head>
 <body>
     <header class="header">
         <nav class="navbar navbar-expand-lg container p-0">
-            <a class="navbar-brand" href="/">Fluid selection</a>
+
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="bi bi-diagram-3-fill me-2" style="color: #f3671a; font-size: 1.4rem;"></i>
+                Fluid selection
+            </a>
+
             <div class="collapse navbar-collapse justify-content-end">
                 {% if request.session.user_id %}
                 <ul class="navbar-nav align-items-center">
+
+                    <li class="nav-item me-4 d-flex align-items-center" style="border-right: 1px solid rgba(255,255,255,0.2); padding-right: 15px;">
+                        <div class="text-end me-2" style="line-height: 1.2;">
+                            <span class="d-block fw-bold" style="color: #ffffff; font-size: 14px;">{{ request.session.username }}</span>
+                            <small class="d-block" style="color: #a0a0a0; font-size: 11px;">
+                                {% if request.session.role == 'main_engineer' %}Главный инженер
+                                {% elif request.session.role == 'admin' %}Администратор
+                                {% else %}Инженер{% endif %}
+                            </small>
+                        </div>
+                        <i class="bi bi-person-circle" style="color: #f3671a; font-size: 1.8rem;"></i>
+                    </li>
+
                     {% if request.session.role == 'admin' or request.session.role == 'main_engineer' %}
-                    <li class="nav-item me-2"><a class="btn" href="{% url 'admin_panel' %}">Справочники</a></li>
+                    <li class="nav-item me-2">
+                        <a class="btn" href="{% url 'admin_panel' %}"><i class="bi bi-journal-bookmark me-1"></i>Справочники</a>
+                    </li>
                     {% endif %}
-                    <li class="nav-item"><a class="btn" href="{% url 'logout' %}">Выход</a></li>
+
+                    <li class="nav-item">
+                        <a class="btn" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-1"></i>Выход</a>
+                    </li>
                 </ul>
                 {% endif %}
             </div>

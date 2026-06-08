@@ -1,14 +1,11 @@
 # Описание базы данных
-
 from django.db import models
-
 
 class CustomUser(models.Model): # Таблица users - пользователи
     username = models.CharField(max_length=50)
     password_hash = models.CharField(max_length=255)
     role = models.CharField(max_length=20)
     full_name = models.CharField(max_length=100)
-    company = models.CharField(max_length=150)
     class Meta:
         managed = False
         db_table = 'users'
@@ -18,14 +15,14 @@ class Project(models.Model): # Таблица projects - созданные по
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     name = models.CharField(max_length=150)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         managed = False
         db_table = 'projects'
 
 
-class LocalWeight(models.Model):
-    # Таблица изолированных весов из программы МАИ
+class LocalWeight(models.Model): # Таблица local_weights - локальные веса МАИ
     CATEGORY_CHOICES = [
         ('interval', 'Интервал'),
         ('profile', 'Профиль ствола'),
@@ -33,8 +30,6 @@ class LocalWeight(models.Model):
     ]
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     name = models.CharField(max_length=100)
-
-    # 5 цифр из МАИ (в долях от 0 до 1, сумма = 1.0)
     weight_filtration = models.FloatField(default=0.2)
     weight_inhibition = models.FloatField(default=0.2)
     weight_friction = models.FloatField(default=0.2)
@@ -42,18 +37,18 @@ class LocalWeight(models.Model):
     weight_cost = models.FloatField(default=0.2)
 
     class Meta:
-        managed = False  # Не забудь убрать False и сделать миграции, если создаешь таблицу с нуля
+        managed = False
         db_table = 'local_weights'
 
-class BaseWeight(models.Model):
+class BaseWeight(models.Model): # Таблица base_weights - глобальные веса МАИ
     weight_interval = models.FloatField(default=0.10)
     weight_profile = models.FloatField(default=0.30)
     weight_complication = models.FloatField(default=0.60)
 
     class Meta:
-        managed = False # Не забудь убрать False и сделать python manage.py makemigrations и migrate!
+        managed = False
         db_table = 'base_weights'
-class Fluid(models.Model):
+class Fluid(models.Model): # Таблица fluids - справочник буровых растворов
     name = models.CharField(max_length=255)
     base_type = models.CharField(max_length=100)
     is_drill_in_fluid = models.BooleanField(default=False)
@@ -114,7 +109,7 @@ class CalculationHistory(models.Model): # Таблица calculation_history - �
     final_w_friction = models.FloatField()
     final_w_eco = models.FloatField()
     final_w_cost = models.FloatField()
-    selected_fluid = models.ForeignKey(Fluid, on_delete=models.CASCADE) #лучше название раствора а не id
+    selected_fluid = models.ForeignKey(Fluid, on_delete=models.CASCADE)
     calc_date = models.DateTimeField(auto_now_add=True)
 
     class Meta:

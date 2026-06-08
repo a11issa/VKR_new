@@ -5,72 +5,55 @@ import pandas as pd
 from django.db.models import Q
 from .models import Fluid, FluidRecipe, Reagent, LocalWeight, BaseWeight
 
-# Расчет окна бурения
-def calculate_physics(H, D_mm, P_pl, is_gas_or_unexplored=False):
+def calculate_physics(H, D_mm, P_pl): # Расчет гидростатических давлений и диапазона плотностей для безопасного бурения
     if H <= 0 or P_pl <= 0:
         return 1.0, 2.0, 0.0, 0.0, 0.0, 0.0, "Глубина и давление должны быть больше нуля"
 
-    rho_w = 1000 # плотность воды
-    g = 9.81 # сила тяжести
-    rho_g = 2300 #средняя плотность горных пород
+    rho_w = 1000
+    g = 9.81
+    rho_g = 2300
 
-    P_g = rho_g * g * H / 1e6 # Расчет горного давления
-    P_gr = 0.87 * P_g # Расчет давления гидроразрыва пласта
-    P_pogl = 0.85 * P_gr # Расчет давления поглощения
+    P_g = rho_g * g * H / 1e6
+    P_gr = 0.87 * P_g
+    P_pogl = 0.85 * P_gr
 
-    # Суммарная репрессия на пласт
-
-    # Шаг 2.1: Определение минимального превышения (dp_min) по Таблице 2
-    dp_min = 0.0
-    if H <= 1000:
-        dp_min = 1.5 if is_gas_or_unexplored else 1.0
-    elif 1001 <= H <= 2500:
-        dp_min = 2.0 if is_gas_or_unexplored else 1.5
-    elif 2501 <= H <= 4500:
-        dp_min = 2.25 if is_gas_or_unexplored else 2.0
+    if H <= 1200:
+        dp_min = P_pl * 0.10
     else:
-        dp_min = 2.7 if is_gas_or_unexplored else 2.5
+        dp_min = P_pl * 0.05
 
-    # Шаг 2.2: Определение надбавки на колебания при СПО (dp_spo)
-    # Сначала вычисляем коэффициент аномальности (K_a)
-    # Нормальное гидростатическое давление воды = 1000 * 9.81 * H / 1e6
     P_hydro = 1000 * g * H / 1e6
     k_a = P_pl / P_hydro if P_hydro > 0 else 1.0
 
-    # Коэффициент K_spo зависит от диаметра скважины
     k_spo = 0.5 if D_mm <= 215.9 else 0.3
 
     dp_spo = k_spo * k_a
 
-    # Шаг 2.3: Итоговая репрессия
     dp_sigma = dp_min + dp_spo
 
-    # Требуемая минимальная плотность жидкости (Формула перевода давления в плотность)
     rho_req = (P_pl + dp_sigma) * 1e6 / (g * H * 1000)
 
-    # Максимальная плотность (по давлению поглощения)
     rho_max = (P_pogl * 1e6) / (g * H * 1000)
 
     err = None
     if rho_req > rho_max:
-        err = f"Условия несовместимы: требуемая плотность {rho_req:.2f} г/см³ превышает давление поглощения ({rho_max:.2f} г/см³). Пробурить интервал традиционным способом нельзя."
+        err = f"Несовместимые условия: Минимально требуемая плотность {rho_req:.2f} г/см³ превышает максимально допустимую ({rho_max:.2f} г/см³). Пробурить интервал традиционным способом невозможно."
 
     return round(rho_req, 2), round(rho_max, 2), round(dp_sigma, 2), \
         round(P_g, 2), round(P_pogl, 2), round(P_gr,2), err
 
-# Расчет свойств бурового раствора
+# Расчет технологических параметров бурового раствора
 def get_calculated_properties(rho_req, angle, dp_sigma):
-    eta = 33 * rho_req - 22 # Требуемая пластическая вязкость
-    tau_0 = 10 + 1.377 * angle # ДНС
-    phi_30 = 80 / dp_sigma if dp_sigma > 0 else 80 # Допустимая водоотдача
-
+    eta = 33 * rho_req - 22
+    tau_0 = 10 + 1.377 * angle
+    phi_30 = 80 / dp_sigma if dp_sigma > 0 else 80
     return {
         'viscosity': round(eta, 1),
         'tau_0': round(tau_0, 1),
         'filtration': round(phi_30, 1)
     }
 
-
+# Реализация МАИ
 def calculate_ahp_weights(matrix):
     n = matrix.shape[0]
     eigenvalues, eigenvectors = np.linalg.eig(matrix)
@@ -83,9 +66,8 @@ def calculate_ahp_weights(matrix):
     cr = ci / ri if ri != 0 else 0
     return [round(w, 4) for w in weights], round(cr, 4)
 
-# Нормализация данных для TOPSIS
+# Агрегация весов и нормализация данных (TOPSIS)
 def aggregate_and_normalize_weights(interval_type, well_profile, fluid_type, complications_list):
-    # Теперь мы берем мета-веса из базы данных!
     base = BaseWeight.objects.first()
     if base:
         W_INT, W_PROF, W_COMP = base.weight_interval, base.weight_profile, base.weight_complication
@@ -132,42 +114,14 @@ def aggregate_and_normalize_weights(interval_type, well_profile, fluid_type, com
         'weight_cost': round(final_w['cost'] / total, 3)
     }
 
+
+# Реализация метода TOPSIS
 def calculate_topsis(df, weights_dict):
     if len(df) == 0: return []
     if len(df) == 1: return [1.0]
 
     matrix = df[["cost", "filtration", "inhibition", "friction", "eco_score"]].values.astype(float)
-    col_sums = np.sqrt((matrix ** 2).sum(axis=0))
-    col_sums = np.where(col_sums == 0, 1e-10, col_sums)
-    norm_matrix = matrix / col_sums
 
-    w = np.array([
-        float(weights_dict.get('weight_cost') or 0.2), float(weights_dict.get('weight_filtration') or 0.2),
-        float(weights_dict.get('weight_inhibition') or 0.2), float(weights_dict.get('weight_friction') or 0.2),
-        float(weights_dict.get('weight_eco') or 0.2)
-    ])
-    weighted_matrix = norm_matrix * w
-
-    ideal_best = [weighted_matrix[:, 0].min(), weighted_matrix[:, 1].min(), weighted_matrix[:, 2].max(), weighted_matrix[:, 3].max(), weighted_matrix[:, 4].max()]
-    ideal_worst = [weighted_matrix[:, 0].max(), weighted_matrix[:, 1].max(), weighted_matrix[:, 2].min(), weighted_matrix[:, 3].min(), weighted_matrix[:, 4].min()]
-
-    dist_best = np.sqrt(((weighted_matrix - ideal_best) ** 2).sum(axis=1))
-    dist_worst = np.sqrt(((weighted_matrix - ideal_worst) ** 2).sum(axis=1))
-
-    denominator = dist_best + dist_worst
-    denominator = np.where(denominator == 0, 1e-10, denominator)
-    return dist_worst / denominator
-
-
-# 2. Реализация метода TOPSIS с жестким контролем MIN и MAX
-def calculate_topsis(df, weights_dict):
-    if len(df) == 0: return []
-    if len(df) == 1: return [1.0]
-
-    # Строгий порядок столбцов: 0-Смета(MIN), 1-Фильтрация(MIN), 2-Ингибирование(MAX), 3-Трение(MAX), 4-Экология(MAX)
-    matrix = df[["cost", "filtration", "inhibition", "friction", "eco_score"]].values.astype(float)
-
-    # Векторная нормализация
     col_sums = np.sqrt((matrix ** 2).sum(axis=0))
     col_sums = np.where(col_sums == 0, 1e-10, col_sums)
     norm_matrix = matrix / col_sums
@@ -181,40 +135,35 @@ def calculate_topsis(df, weights_dict):
     ])
     weighted_matrix = norm_matrix * w
 
-    # Определение Идеалов (A+ и A-)
-    # A+ : Cost(MIN), Filt(MIN), Inh(MAX), Fric(MAX), Eco(MAX)
     ideal_best = [
         weighted_matrix[:, 0].min(), weighted_matrix[:, 1].min(),
-        weighted_matrix[:, 2].max(), weighted_matrix[:, 3].max(), weighted_matrix[:, 4].max()
+        weighted_matrix[:, 2].max(), weighted_matrix[:, 3].min(), weighted_matrix[:, 4].max()
     ]
-    # A- : Cost(MAX), Filt(MAX), Inh(MIN), Fric(MIN), Eco(MIN)
     ideal_worst = [
         weighted_matrix[:, 0].max(), weighted_matrix[:, 1].max(),
-        weighted_matrix[:, 2].min(), weighted_matrix[:, 3].min(), weighted_matrix[:, 4].min()
+        weighted_matrix[:, 2].min(), weighted_matrix[:, 3].max(), weighted_matrix[:, 4].min()
     ]
 
     dist_best = np.sqrt(((weighted_matrix - ideal_best) ** 2).sum(axis=1))
     dist_worst = np.sqrt(((weighted_matrix - ideal_worst) ** 2).sum(axis=1))
 
-    # Избегаем деления на ноль
     denominator = dist_best + dist_worst
     denominator = np.where(denominator == 0, 1e-10, denominator)
 
     return dist_worst / denominator
 
-# Расчет сметы и рецептуры
+# Расчет объема системы, рецептуры и стоимости
 def get_recipe_data(fluid_id, req_density, D_mm, H, T_zab, complications_str):
     fluid = Fluid.objects.get(id=fluid_id)
     req_density = float(req_density)
     base_density = float(fluid.base_density)
 
-    # Расчет объема по формуле: V_бр = V_ц.с. + K_з * V_скв
     D_m = D_mm / 1000.0
-    k1 = 1.1  # Коэффициент кавернозности
-    V_skv = H * (np.pi * (D_m ** 2) * k1) / 4.0 # Расчет объема скважины
-    V_cs = 5.0  # Объем желобной системы
-    K_z = 2.0  # Коэффициент запаса
-    V_total = round(V_cs + K_z * V_skv, 1) # Итоговый объем
+    k1 = 1.1
+    V_skv = H * (np.pi * (D_m ** 2) * k1) / 4.0
+    V_cs = 5.0
+    K_z = 2.0
+    V_total = round(V_cs + K_z * V_skv, 1)
 
     fluid_base_name = "Нефтяная основа (РУО)" if fluid.base_type == "Углеводородная" else "Вода техническая"
     litho_tag = 'Общий'
@@ -231,7 +180,6 @@ def get_recipe_data(fluid_id, req_density, D_mm, H, T_zab, complications_str):
     barite_kg = 0
     v_base_fraction = 1.0
 
-    # Утяжеление баритом (Закон сохранения массы)
     if req_density > base_density and req_density < 4.2:
         barite_kg = int(1000 * 4.2 * (req_density - base_density) / (4.2 - req_density))
         v_barite = barite_kg / 4200.0
